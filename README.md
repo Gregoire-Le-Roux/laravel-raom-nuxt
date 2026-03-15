@@ -1,4 +1,4 @@
-# Laravel REST API Nuxt SDK (ORM-like) 🚀
+# Laravel REST API Object Mapper (ORM-like) 🚀
 
 TypeScript SDK for Nuxt, inspired by ORM ergonomics, built to talk to APIs exposed by `lomkit/laravel-rest-api`.
 
