@@ -1,4 +1,5 @@
 import { hydrate } from '../../../model/hydrate'
+import { WriteBuilder } from '../../../mutation/WriteBuilder'
 import { QueryBuilder } from '../../../query/QueryBuilder'
 import { MetadataStorage, type ResourceMeta } from '../../metadata'
 
@@ -30,6 +31,9 @@ export function Resource(endpoint: string, options?: { limits?: number[] }) {
       const instance = new constructor()
       Object.assign(instance, data)
       return instance
+    }
+    constructor.write = () => {
+      return new WriteBuilder(constructor)
     }
     constructor.getMeta = () => {
       return MetadataStorage.getResource(constructor)

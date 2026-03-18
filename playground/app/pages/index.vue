@@ -15,7 +15,6 @@
 
 <script setup lang="ts">
 import { Category } from '~/models/Category'
-import { Product } from '../models/Product'
 
 const categories = await Category.query().include('products', q => q.where('price', '>', 20)).get()
 </script>

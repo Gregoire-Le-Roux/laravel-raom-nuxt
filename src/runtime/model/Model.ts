@@ -1,5 +1,6 @@
 import { IdentityMap } from '../core/identityMap'
 import { MetadataStorage } from '../core/metadata'
+import type { WriteBuilder } from '../mutation/WriteBuilder'
 import type { QueryBuilder } from '../query/QueryBuilder'
 
 class HasManyRelation {
@@ -28,6 +29,10 @@ export abstract class Model {
   }
 
   static create<T extends Model>(this: new () => T, _: unknown): T {
+    throw new Error('Must be decorated with @Resource')
+  }
+
+  static write<T extends Model>(this: new () => T): WriteBuilder<T> {
     throw new Error('Must be decorated with @Resource')
   }
 
