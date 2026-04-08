@@ -18,10 +18,13 @@ export type FieldMeta = {
 }
 export type RelationMeta = {
   property: string
+  methodName?: string
   target: () => typeof Model
+  type?: 'hasOne' | 'hasMany' | 'belongsTo' | 'belongsToMany'
   many?: boolean
   unique?: boolean
   pivot?: Record<string, FieldMeta>
+  required?: boolean
 }
 export type ResourceMeta = {
   target: typeof Model

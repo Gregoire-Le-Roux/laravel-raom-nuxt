@@ -6,11 +6,20 @@ export function hydrate<T extends Model>(resourceClass: new () => T, data: any):
   const meta = MetadataStorage.getResource(resourceClass)
   const keyField = meta.key
   const keyValue = keyField ? data[keyField] : undefined
-  const instance = IdentityMap.get(resourceClass, keyValue) ?? new resourceClass()
+  const sharedFields = IdentityMap.get(resourceClass, keyValue)
+  const instance = new resourceClass()
+
+  if (sharedFields) {
+    instance.useSharedFields(sharedFields)
+  }
 
   instance._isDeleted = false
 
+  const relationProperties = new Set(meta.relations.map(r => r.property))
+
   for (const key in data) {
+    if (relationProperties.has(key)) continue
+
     const field = meta.fields.find(f => f.name === key)
     let value = data[key]
 
@@ -27,25 +36,33 @@ export function hydrate<T extends Model>(resourceClass: new () => T, data: any):
         }
       }
     }
-    (instance as any)[key] = value
+    instance.setField(key, value, false)
   }
 
   for (const relation of meta.relations) {
     const relData = data[relation.property]
     if (!relData) continue
 
+    const relationBuilderCandidate = (instance as any)[relation.property]
+
     if (relation.many) {
-      (instance as any)[relation.property]
-        = relData.map((item: any) => hydrate(relation.target(), item))
+      const hydratedRelation = relData.map((item: any) => hydrate(relation.target(), item))
+      if (relationBuilderCandidate && typeof relationBuilderCandidate.setLoaded === 'function') {
+        relationBuilderCandidate.setLoaded(hydratedRelation)
+      }
+      ;(instance as any)[relation.property] = hydratedRelation
     }
     else {
-      (instance as any)[relation.property]
-        = hydrate(relation.target(), relData)
+      const hydratedRelation = hydrate(relation.target(), relData)
+      if (relationBuilderCandidate && typeof relationBuilderCandidate.setLoaded === 'function') {
+        relationBuilderCandidate.setLoaded(hydratedRelation)
+      }
+      ;(instance as any)[relation.property] = hydratedRelation
     }
   }
 
   if (keyValue !== undefined && keyValue !== null) {
-    IdentityMap.set(resourceClass, keyValue, instance)
+    IdentityMap.set(resourceClass, keyValue, instance._fields)
   }
 
   return instance

@@ -3,6 +3,7 @@ import { MetadataStorage } from '../core/metadata'
 import { hydrate } from '../model/hydrate'
 import type { Model } from '../model/Model'
 import { ModelList } from '../model/ModelList'
+import { PayloadCache } from '../cache/payloadCache'
 
 type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'like' | 'not like' | 'in' | 'not in' | 'between' | 'not between'
 type FilterType = 'and' | 'or'
@@ -62,6 +63,10 @@ interface SearchPayload {
   }
 }
 
+type SearchResponse<TData = unknown[]> = {
+  data: TData
+} & Record<string, unknown>
+
 export class QueryBuilder<T extends Model> {
   private resource: ResourceMeta
   private filters: (Filter | NestedFilter)[] = []
@@ -73,8 +78,8 @@ export class QueryBuilder<T extends Model> {
   private instructions: Instruction[] = []
   private gates: string[] = []
   private textSearch?: string
-  private pageNumber: number = 1
-  private limitNumber: number = 15
+  private pageNumber: number | null = null
+  private limitNumber: number | null = null
 
   constructor(resourceClass: new () => T) {
     this.resource = MetadataStorage.getResource(resourceClass)
@@ -358,8 +363,13 @@ export class QueryBuilder<T extends Model> {
       payload.search.gates = this.gates
     }
 
-    // payload.search.page = this.pageNumber
-    // payload.search.limit = this.limitNumber
+    if (this.pageNumber !== null) {
+      payload.search.page = this.pageNumber
+    }
+
+    if (this.limitNumber !== null) {
+      payload.search.limit = this.limitNumber
+    }
 
     return payload
   }
@@ -367,28 +377,58 @@ export class QueryBuilder<T extends Model> {
   /**
    * Exécute la recherche et retourne les résultats
    */
-  async get(): Promise<ModelList<T>> {
+  async get(): Promise<[ModelList<T> | unknown[], Record<string, unknown>]> {
     const payload = this.buildPayload()
     const url = `http://localhost/api/${this.resource.endpoint}/search`
-    const response = await $fetch<{ data: any[] }>(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+    const body = JSON.stringify(payload)
 
-    const data = response.data
+    // Check cache first (populated from SSR payload on client)
+    const cachedResponse = PayloadCache.lookup(url, 'POST', payload) as SearchResponse<T[]> | null
+    let response: SearchResponse<T[]>
 
-    return new ModelList(
-      Array.isArray(data)
-        ? data.map((item: any) => hydrate(this.resource.target, item))
-        : [],
-    )
+    if (cachedResponse !== null) {
+      // Use full cached response (data + pagination/meta)
+      response = cachedResponse
+    }
+    else {
+      // Fetch fresh data
+      response = await $fetch<SearchResponse<T[]>>(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
+
+      // Register in cache for SSR → client transfer
+      if (import.meta.server) {
+        PayloadCache.register(url, 'POST', response, payload)
+      }
+    }
+
+    const data = Array.isArray(response.data) ? response.data : []
+    const { data: _ignoredData, ...searchMeta } = response
+
+    let ret: ModelList<T> | T[]
+    if (import.meta.server) {
+      ret = data
+      console.log('server')
+    }
+    else
+      ret = new ModelList<T>(
+        Array.isArray(data)
+          ? data.map((item: T) => hydrate(this.resource.target as new () => T, item as Record<string, unknown>))
+          : [],
+      )
+    console.log('Finished hydration of results for resource', this.resource.endpoint)
+    return [
+      ret,
+      searchMeta,
+    ]
   }
 
   /**
    * Exécute la recherche et retourne les résultats
    */
-  async getPage(page: number): Promise<ModelList<T>> {
+  async getPage(page: number): Promise<[ModelList<T> | T[], Record<string, unknown>]> {
     this.page(page)
     return await this.get()
   }
@@ -398,8 +438,8 @@ export class QueryBuilder<T extends Model> {
    */
   async first(): Promise<T | null> {
     this.checkLimit(1)
-    const results = await this.get()
-    return results.at(0) || null
+    const [results] = await this.get()
+    return Array.isArray(results) ? (results.at(0) as T | null) ?? null : (results.at(0) ?? null)
   }
 
   /**

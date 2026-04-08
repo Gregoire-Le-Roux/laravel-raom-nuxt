@@ -61,12 +61,11 @@ describe('IdentityMap', () => {
   })
 
   describe('set / get', () => {
-    it('stores and retrieves an instance by class and key', () => {
-      const user = new User()
-      user.id = 1
-      IdentityMap.set(User, 1, user)
+    it('stores and retrieves fields by class and key', () => {
+      const fields = { id: 1, name: 'Alice' }
+      IdentityMap.set(User, 1, fields)
 
-      expect(IdentityMap.get(User, 1)).toBe(user)
+      expect(IdentityMap.get(User, 1)).toBe(fields)
     })
 
     it('returns undefined for an unknown key', () => {
@@ -74,32 +73,28 @@ describe('IdentityMap', () => {
     })
 
     it('returns undefined for key null', () => {
-      const user = new User()
-      IdentityMap.set(User, null, user)
+      IdentityMap.set(User, null, { id: 1 })
       expect(IdentityMap.get(User, null)).toBeUndefined()
     })
 
     it('returns undefined for key undefined', () => {
-      const user = new User()
-      IdentityMap.set(User, undefined, user)
+      IdentityMap.set(User, undefined, { id: 1 })
       expect(IdentityMap.get(User, undefined)).toBeUndefined()
     })
 
     it('isolates instances by class', () => {
-      const user = new User()
-      const post = new Post()
-      IdentityMap.set(User, 1, user)
-      IdentityMap.set(Post, 1, post)
+      const userFields = { id: 1 }
+      const postFields = { id: 1 }
+      IdentityMap.set(User, 1, userFields)
+      IdentityMap.set(Post, 1, postFields)
 
-      expect(IdentityMap.get(User, 1)).toBe(user)
-      expect(IdentityMap.get(Post, 1)).toBe(post)
+      expect(IdentityMap.get(User, 1)).toBe(userFields)
+      expect(IdentityMap.get(Post, 1)).toBe(postFields)
     })
 
-    it('overwrites the existing instance for the same key', () => {
-      const first = new User()
-      const second = new User()
-      first.id = 1
-      second.id = 1
+    it('overwrites the existing fields for the same key', () => {
+      const first = { id: 1, name: 'First' }
+      const second = { id: 1, name: 'Second' }
 
       IdentityMap.set(User, 1, first)
       IdentityMap.set(User, 1, second)
@@ -107,20 +102,17 @@ describe('IdentityMap', () => {
       expect(IdentityMap.get(User, 1)).toBe(second)
     })
 
-    it('returns the instance directly from set', () => {
-      const user = new User()
-      user.id = 5
+    it('returns the fields object directly from set', () => {
+      const fields = { id: 5 }
 
-      const returned = IdentityMap.set(User, 5, user)
-      expect(returned).toBe(user)
+      const returned = IdentityMap.set(User, 5, fields)
+      expect(returned).toBe(fields)
     })
   })
 
   describe('delete', () => {
     it('removes an entry by class and key', () => {
-      const user = new User()
-      user.id = 2
-      IdentityMap.set(User, 2, user)
+      IdentityMap.set(User, 2, { id: 2 })
       IdentityMap.delete(User, 2)
 
       expect(IdentityMap.get(User, 2)).toBeUndefined()
@@ -131,10 +123,8 @@ describe('IdentityMap', () => {
     })
 
     it('does not affect other keys in the same class', () => {
-      const user1 = new User()
-      const user2 = new User()
-      user1.id = 1
-      user2.id = 2
+      const user1 = { id: 1 }
+      const user2 = { id: 2 }
       IdentityMap.set(User, 1, user1)
       IdentityMap.set(User, 2, user2)
 
@@ -151,8 +141,8 @@ describe('IdentityMap', () => {
 
   describe('clear', () => {
     it('clears all entries when called without argument', () => {
-      IdentityMap.set(User, 1, new User())
-      IdentityMap.set(Post, 1, new Post())
+      IdentityMap.set(User, 1, { id: 1 })
+      IdentityMap.set(Post, 1, { id: 1 })
 
       IdentityMap.clear()
 
@@ -161,8 +151,8 @@ describe('IdentityMap', () => {
     })
 
     it('clears only the specified class', () => {
-      const user = new User()
-      const post = new Post()
+      const user = { id: 1 }
+      const post = { id: 1 }
       IdentityMap.set(User, 1, user)
       IdentityMap.set(Post, 1, post)
 

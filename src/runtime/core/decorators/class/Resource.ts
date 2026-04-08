@@ -13,11 +13,16 @@ export function Resource(endpoint: string, options?: { limits?: number[] }) {
     }
     MetadataStorage.addResource(meta)
 
+    let bootstrapInstance
     try {
-      new constructor()
+      bootstrapInstance = new constructor()
     }
     catch {
       throw new Error(`Failed to instantiate resource ${constructor.name}. Make sure it has a parameterless constructor and that all its dependencies can be instantiated without parameters.`)
+    }
+
+    if (typeof constructor.registerRelationBuildersFromInstance === 'function') {
+      constructor.registerRelationBuildersFromInstance(bootstrapInstance)
     }
 
     constructor.query = () => {
@@ -26,11 +31,13 @@ export function Resource(endpoint: string, options?: { limits?: number[] }) {
     constructor.hydrate = (data: any) => {
       return hydrate(constructor, data)
     }
-    constructor.create = (data: any) => {
+    constructor.new = (data: any) => {
       const instance = new constructor()
       Object.assign(instance, data)
+      instance._isNew = true
       return instance
     }
+    constructor.create = constructor.new
     constructor.getMeta = () => {
       return MetadataStorage.getResource(constructor)
     }

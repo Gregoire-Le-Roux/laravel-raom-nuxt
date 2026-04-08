@@ -1,5 +1,5 @@
 import { Resource } from '../../../src/runtime/core/decorators/class/Resource'
-import { Relation } from '../../../src/runtime/core/decorators/method/Relation'
+import { HasMany } from '../../../src/runtime/core/decorators/method/Relation'
 import { Field } from '../../../src/runtime/core/decorators/property/Field'
 import { Key } from '../../../src/runtime/core/decorators/property/Key'
 import { Model } from '../../../src/runtime/model/Model'
@@ -14,7 +14,7 @@ class Category extends Model {
   @Field()
   name!: string
 
-  @Relation(() => Product, { many: true })
+  @HasMany(() => Product)
   products?: Product[]
 
   Products() {

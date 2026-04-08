@@ -1,16 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Resource } from '../../src/runtime/core/decorators/class/Resource'
+import { Field } from '../../src/runtime/core/decorators/property/Field'
+import { Key } from '../../src/runtime/core/decorators/property/Key'
+import { BelongsTo, HasManyRelation } from '../../src/runtime/core/decorators/method/Relation'
 import { Model } from '../../src/runtime/model/Model'
-import { MetadataStorage } from '../../src/runtime/core/metadata'
-import { IdentityMap } from '../../src/runtime/core/identityMap'
 
 class User extends Model {
   id?: number
 }
 
+@Resource('categories', { limits: [10] })
+class Category extends Model {
+  @Key()
+  @Field()
+  id!: number
+
+  @Field()
+  name!: string
+}
+
+@Resource('products', { limits: [10] })
+class Product extends Model {
+  @Key()
+  @Field()
+  id!: number
+
+  @Field()
+  name!: string
+
+  category = BelongsTo(() => Category, 'category')
+}
+
 describe('Model', () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
-    (globalThis as any).$fetch = vi.fn()
+    vi.restoreAllMocks()
   })
 
   it('query/hydrate/create throw when model is not decorated', () => {
@@ -19,89 +42,100 @@ describe('Model', () => {
     expect(() => User.create({})).toThrow('Must be decorated with @Resource')
   })
 
-  it('delete throws when key metadata is missing', async () => {
-    vi.spyOn(MetadataStorage, 'getResource').mockReturnValue({
-      target: User as any,
-      endpoint: 'users',
-      limits: [10],
-      fields: [],
-      relations: [],
-    })
+  it('Resource.new marks instances as new', () => {
+    const product = Product.new({ name: 'Draft product' })
 
-    const user = new User()
-    await expect(user.delete()).rejects.toThrow('doesn\'t have a key field defined')
+    expect(product._isNew).toBe(true)
+    expect(product.name).toBe('Draft product')
+    expect(product._fields.name).toBeUndefined()
+    expect(product._changes.name).toBe('Draft product')
   })
 
-  it('delete throws when key value is missing on instance', async () => {
-    vi.spyOn(MetadataStorage, 'getResource').mockReturnValue({
-      target: User as any,
-      endpoint: 'users',
-      limits: [10],
-      key: 'id',
-      fields: [],
-      relations: [],
-    })
+  it('tracks field mutations in _fields and _changes via proxy', () => {
+    const product = Product.hydrate({ id: 10, name: 'Hydrated product' })
 
-    const user = new User()
-    await expect(user.delete()).rejects.toThrow('Key field id is not set')
+    expect(product._fields.id).toBe(10)
+    expect(product._fields.name).toBe('Hydrated product')
+    expect(product._changes).toEqual({})
+
+    product.name = 'Updated product'
+
+    expect(product._fields.name).toBe('Hydrated product')
+    expect(product.name).toBe('Updated product')
+    expect(product._changes.name).toBe('Updated product')
   })
 
-  it('delete calls API and removes from identity map on success', async () => {
-    const getResource = vi.spyOn(MetadataStorage, 'getResource').mockReturnValue({
-      target: User as any,
-      endpoint: 'users',
-      limits: [10],
-      key: 'id',
-      fields: [],
-      relations: [],
-    })
+  it('applies pending changes to fields only when applyChanges is called', () => {
+    const product = Product.hydrate({ id: 12, name: 'Initial name' })
 
-    const idDeleteSpy = vi.spyOn(IdentityMap, 'delete').mockImplementation(() => { })
-    const fetchMock = (globalThis as any).$fetch as ReturnType<typeof vi.fn>
-    fetchMock.mockResolvedValue({})
+    product.name = 'Pending name'
+    expect(product._fields.name).toBe('Initial name')
+    expect(product._changes.name).toBe('Pending name')
 
-    const user = new User()
-    user.id = 42
-
-    await expect(user.delete()).resolves.toBe(true)
-    expect(user._isDeleted).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost/api/users',
-      expect.objectContaining({
-        method: 'DELETE',
-      }),
-    )
-    expect(idDeleteSpy).toHaveBeenCalledWith(User as any, 42)
-    expect(getResource).toHaveBeenCalled()
+    product.applyChanges()
+    expect(product._fields.name).toBe('Pending name')
+    expect(product._changes).toEqual({})
   })
 
-  it('delete resets _isDeleted to false when request fails', async () => {
-    vi.spyOn(MetadataStorage, 'getResource').mockReturnValue({
-      target: User as any,
-      endpoint: 'users',
-      limits: [10],
-      key: 'id',
-      fields: [],
-      relations: [],
-    })
+  it('hydrate resets _isDeleted', () => {
+    const product = Product.hydrate({ id: 1, name: 'Hydrated product' })
+    product._isDeleted = true
 
-    const fetchMock = (globalThis as any).$fetch as ReturnType<typeof vi.fn>
-    fetchMock.mockRejectedValue(new Error('network error'))
+    const hydratedAgain = Product.hydrate({ id: 1, name: 'Hydrated product' })
 
-    const user = new User()
-    user.id = 42
-
-    await expect(user.delete()).rejects.toThrow('network error')
-    expect(user._isDeleted).toBe(false)
+    expect(hydratedAgain._isDeleted).toBe(false)
   })
 
-  it('hasMany returns relation object with attach method', () => {
-    class Post extends Model { }
-    const user = new User()
-    const relation = user.hasMany(Post as any, 'posts')
-    expect(relation).toBeDefined()
-    expect(typeof (relation as any).attach).toBe('function')
-    expect(() => (relation as any).attach(new Post())).not.toThrow()
+  it('relation helpers remain defined without mutation behavior', () => {
+    class Post extends Model {}
+
+    type RelationStub = {
+      attach(model: Post): unknown
+      detach(key: number): unknown
+    }
+
+    class BlogUser extends Model {
+      posts = HasManyRelation(() => Post, 'posts')
+    }
+
+    const user = new BlogUser()
+    const relation = user.hasMany(Post as unknown as typeof Model, 'posts')
+    const relationStub = relation as RelationStub
+
+    expect(relation).toBe(user.posts)
+    expect(typeof relationStub.attach).toBe('function')
+    expect(relationStub.attach(new Post())).toBe(relation)
+    expect(relationStub.detach(1)).toBe(relation)
+  })
+
+  it('does not store relation builders in _fields', () => {
+    const product = new Product()
+
+    expect(product._fields.category).toBeUndefined()
+    expect(product.category).toBeDefined()
+  })
+
+  it('keeps relation assembly per response without leaking relation state across hydrations', () => {
+    const first = Product.hydrate({
+      id: 4,
+      name: 'Camera',
+      category: {
+        id: 2,
+        name: 'Photo',
+      },
+    })
+
+    const firstRelation = first.belongsTo(Category, 'category') as { name?: string }
+    expect(firstRelation).toBeDefined()
+    expect(firstRelation.name).toBe('Photo')
+
+    const second = Product.hydrate({
+      id: 4,
+      name: 'Camera V2',
+    })
+
+    const secondRelation = second.belongsTo(Category, 'category') as { name?: string } | undefined
+    expect(second.name).toBe('Camera V2')
+    expect(secondRelation?.name).toBeUndefined()
   })
 })

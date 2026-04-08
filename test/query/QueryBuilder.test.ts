@@ -359,18 +359,18 @@ describe('QueryBuilder', () => {
           { id: 2, firstname: 'Bob' },
         ],
       })
-      const result = await new QueryBuilder(User).get()
+      const [result] = await new QueryBuilder(User).get()
       expect(result).toBeInstanceOf(ModelList)
-      expect(result.length).toBe(2)
-      expect(result.at(0)).toBeInstanceOf(User)
-      expect((result.at(0) as User).firstname).toBe('Alice')
+      expect((result as ModelList<User>).length).toBe(2)
+      expect((result as ModelList<User>).at(0)).toBeInstanceOf(User)
+      expect(((result as ModelList<User>).at(0) as User).firstname).toBe('Alice')
     })
 
     it('returns an empty ModelList when data is empty', async () => {
       gFetch().mockResolvedValue({ data: [] })
-      const result = await new QueryBuilder(User).get()
+      const [result] = await new QueryBuilder(User).get()
       expect(result).toBeInstanceOf(ModelList)
-      expect(result.length).toBe(0)
+      expect((result as ModelList<User>).length).toBe(0)
     })
   })
 
@@ -418,9 +418,9 @@ describe('QueryBuilder', () => {
   describe('getPage()', () => {
     it('calls get() and returns the resulting ModelList', async () => {
       gFetch().mockResolvedValue({ data: [{ id: 5 }] })
-      const result = await new QueryBuilder(User).getPage(2)
+      const [result] = await new QueryBuilder(User).getPage(2)
       expect(result).toBeInstanceOf(ModelList)
-      expect(result.length).toBe(1)
+      expect((result as ModelList<User>).length).toBe(1)
     })
   })
 
