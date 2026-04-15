@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Resource } from '../../src/runtime/core/decorators/class/Resource'
 import { Field } from '../../src/runtime/core/decorators/property/Field'
 import { Key } from '../../src/runtime/core/decorators/property/Key'
-import { BelongsTo, HasMany } from '../../src/runtime/relations/builders'
+import { BelongsTo, HasMany } from '../../src/runtime/relations'
 import { Model } from '../../src/runtime/model/Model'
 
 type G = { $fetch: ReturnType<typeof vi.fn> }
@@ -94,7 +94,7 @@ class Report extends Model {
 describe('Model', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    ;(globalThis as unknown as G).$fetch = vi.fn()
+      ; (globalThis as unknown as G).$fetch = vi.fn()
   })
 
   it('query/hydrate/create throw when model is not decorated', () => {

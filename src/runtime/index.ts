@@ -10,7 +10,7 @@ export {
     HasMany,
     HasOne,
     isRelationBuilder,
-} from './relations/builders'
+} from './relations'
 
 // Model classes
 export { Model } from './model/Model'

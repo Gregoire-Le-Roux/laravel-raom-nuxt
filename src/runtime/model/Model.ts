@@ -1,8 +1,9 @@
 import { MetadataStorage } from '../core/metadata'
 import type { QueryBuilder } from '../query/QueryBuilder'
 import { IdentityMap } from '../core/identityMap'
-import { isRelationBuilder, type PendingRelationOperation } from '../relations/builders'
+import { type PendingRelationOperation } from '../relations/base'
 import getCurrentFetch from '../helpers/getCurrentFetch'
+import { isRelationBuilder } from '../relations'
 
 type ParentRelationLink = {
   owner: Model
@@ -70,7 +71,8 @@ export abstract class Model {
       return false
     }
 
-    if (typeof value === 'function' || isRelationBuilder(value) || this.isRelationProperty(property)) {
+    if (typeof value === 'function' || isRelationBuilder
+      (value) || this.isRelationProperty(property)) {
       return false
     }
 

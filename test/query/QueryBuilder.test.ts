@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Model } from '../../src/runtime/model/Model'
 import { Resource, Field, Key } from '../../src/runtime/core/decorators'
-import { HasMany } from '../../src/runtime/relations/builders'
+import { HasMany } from '../../src/runtime/relations'
 import { QueryBuilder } from '../../src/runtime/query/QueryBuilder'
 import { ModelList } from '../../src/runtime/model/ModelList'
 

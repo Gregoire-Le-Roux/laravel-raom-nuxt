@@ -1,6 +1,6 @@
 import { IdentityMap } from '../core/identityMap'
 import { MetadataStorage } from '../core/metadata'
-import { isRelationBuilder } from '../relations/builders'
+import { isRelationBuilder } from '../relations'
 import type { Model } from './Model'
 
 export function hydrate<T extends Model>(resourceClass: new () => T, data: any): T {
