@@ -33,6 +33,9 @@ export function Resource(endpoint: string, options?: { limits?: number[] }) {
     }
     constructor.new = (data: any) => {
       const instance = new constructor()
+      if (typeof instance.initializeRelationBuilders === 'function') {
+        instance.initializeRelationBuilders()
+      }
       Object.assign(instance, data)
       instance._isNew = true
       return instance

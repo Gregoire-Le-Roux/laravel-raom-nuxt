@@ -8,13 +8,9 @@ export default defineNuxtModule<ModuleOptions>({
     name: 'laravel-rest-api-nuxt',
     configKey: 'laravelRestApiNuxt',
   },
-  // Default configuration options of the Nuxt module
   defaults: {},
   setup(_options, nuxt) {
     const resolver = createResolver(import.meta.url)
-
-    // Do not add the extension since the `.ts` will be transpiled to `.mjs` after `npm run prepack`
     addPlugin(resolver.resolve('./runtime/plugin'))
-    console.log('My module has been added to the Nuxt application!')
   },
 })

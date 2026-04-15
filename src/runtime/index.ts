@@ -2,7 +2,15 @@
 export { Resource } from './core/decorators/class/Resource'
 export { Key } from './core/decorators/property/Key'
 export { Field } from './core/decorators/property/Field'
-export { Relation, BelongsToMany, BelongsTo, HasMany } from './core/decorators/method/Relation'
+
+// Runtime relations API
+export {
+    BelongsTo,
+    BelongsToMany,
+    HasMany,
+    HasOne,
+    isRelationBuilder,
+} from './relations/builders'
 
 // Model classes
 export { Model } from './model/Model'

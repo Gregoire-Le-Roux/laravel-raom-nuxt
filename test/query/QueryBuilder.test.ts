@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Model } from '../../src/runtime/model/Model'
-import { Resource, Field, Key, Relation } from '../../src/runtime/core/decorators'
+import { Resource, Field, Key } from '../../src/runtime/core/decorators'
+import { HasMany } from '../../src/runtime/relations/builders'
 import { QueryBuilder } from '../../src/runtime/query/QueryBuilder'
 import { ModelList } from '../../src/runtime/model/ModelList'
 
@@ -31,8 +32,7 @@ class User extends Model {
   @Field()
   lastname!: string
 
-  @Relation(() => Post, { many: true, pivot: {} })
-  posts!: Post[]
+  posts = HasMany(() => Post, 'posts')
 }
 
 /** Resource that does NOT allow limit 1 — used to test first() guard. */
@@ -74,7 +74,7 @@ describe('QueryBuilder', () => {
     })
 
     it('throws when the model is not registered in MetadataStorage', () => {
-      class Ghost extends Model {}
+      class Ghost extends Model { }
       expect(() => new QueryBuilder(Ghost)).toThrow('Resource Ghost not registered')
     })
   })
@@ -347,7 +347,7 @@ describe('QueryBuilder', () => {
       gFetch().mockResolvedValue({ data: [] })
       await new QueryBuilder(User).get()
       expect(gFetch()).toHaveBeenCalledWith(
-        'http://localhost/api/users/search',
+        'users/search',
         expect.objectContaining({ method: 'POST' }),
       )
     })

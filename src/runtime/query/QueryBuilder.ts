@@ -4,6 +4,8 @@ import { hydrate } from '../model/hydrate'
 import type { Model } from '../model/Model'
 import { ModelList } from '../model/ModelList'
 import { PayloadCache } from '../cache/payloadCache'
+import getCurrentFetch from '../helpers/getCurrentFetch'
+import type { ISearchResponse } from '../types/search'
 
 type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'like' | 'not like' | 'in' | 'not in' | 'between' | 'not between'
 type FilterType = 'and' | 'or'
@@ -377,24 +379,23 @@ export class QueryBuilder<T extends Model> {
   /**
    * Exécute la recherche et retourne les résultats
    */
-  async get(): Promise<[ModelList<T> | unknown[], Record<string, unknown>]> {
+  async get(): Promise<[ModelList<T> | T[], Omit<ISearchResponse<T>, 'data'>]> {
     const payload = this.buildPayload()
-    const url = `http://localhost/api/${this.resource.endpoint}/search`
+    const url = `${this.resource.endpoint}/search`
     const body = JSON.stringify(payload)
 
     // Check cache first (populated from SSR payload on client)
-    const cachedResponse = PayloadCache.lookup(url, 'POST', payload) as SearchResponse<T[]> | null
-    let response: SearchResponse<T[]>
+    const cachedResponse = PayloadCache.lookup(url, 'POST', payload) as ISearchResponse<T> | null
+    let response: ISearchResponse<T>
 
     if (cachedResponse !== null) {
       // Use full cached response (data + pagination/meta)
       response = cachedResponse
     }
     else {
-      // Fetch fresh data
-      response = await $fetch<SearchResponse<T[]>>(url, {
+      const customFetch = getCurrentFetch()
+      response = await customFetch<ISearchResponse<T>>(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body,
       })
 
@@ -410,7 +411,6 @@ export class QueryBuilder<T extends Model> {
     let ret: ModelList<T> | T[]
     if (import.meta.server) {
       ret = data
-      console.log('server')
     }
     else
       ret = new ModelList<T>(
@@ -418,7 +418,6 @@ export class QueryBuilder<T extends Model> {
           ? data.map((item: T) => hydrate(this.resource.target as new () => T, item as Record<string, unknown>))
           : [],
       )
-    console.log('Finished hydration of results for resource', this.resource.endpoint)
     return [
       ret,
       searchMeta,
@@ -428,7 +427,7 @@ export class QueryBuilder<T extends Model> {
   /**
    * Exécute la recherche et retourne les résultats
    */
-  async getPage(page: number): Promise<[ModelList<T> | T[], Record<string, unknown>]> {
+  async getPage(page: number): Promise<[ModelList<T> | T[], Omit<ISearchResponse<T>, 'data'>]> {
     this.page(page)
     return await this.get()
   }

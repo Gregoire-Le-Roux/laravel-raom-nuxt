@@ -1,16 +1,35 @@
 import { MetadataStorage } from '../core/metadata'
 import type { QueryBuilder } from '../query/QueryBuilder'
-import { isRelationBuilder } from '../core/decorators/method/Relation'
+import { IdentityMap } from '../core/identityMap'
+import { isRelationBuilder, type PendingRelationOperation } from '../relations/builders'
+import getCurrentFetch from '../helpers/getCurrentFetch'
+
+type ParentRelationLink = {
+  owner: Model
+  relation: string
+}
+
+type MutationPayload = {
+  operation: 'create' | 'update' | 'delete' | 'attach' | 'detach' | 'sync' | 'toggle'
+  key?: unknown
+  attributes?: Record<string, unknown>
+  relations?: Record<string, MutationPayload | MutationPayload[]>
+} & Record<string, unknown>
 
 export abstract class Model {
   _isDeleted = false
   _isNew = false
   _fields: Record<string, unknown> = {}
   _changes: Record<string, unknown> = {}
+  _parentRelations: ParentRelationLink[] = []
 
   constructor() {
     return new Proxy(this, {
       get(target, property, receiver) {
+        if (typeof property === 'string' && Object.prototype.hasOwnProperty.call(target._changes, property)) {
+          return target._changes[property]
+        }
+
         if (typeof property === 'string' && Object.prototype.hasOwnProperty.call(target._fields, property)) {
           return target._fields[property]
         }
@@ -120,6 +139,10 @@ export abstract class Model {
     instance.registerRelationBuilders({ registerMeta: true })
   }
 
+  initializeRelationBuilders(): void {
+    this.registerRelationBuilders()
+  }
+
   private registerRelationBuilders(options?: { registerMeta?: boolean }) {
     for (const [propertyName, value] of Object.entries(this)) {
       if (!isRelationBuilder(value)) {
@@ -127,6 +150,7 @@ export abstract class Model {
       }
 
       value.bindProperty(propertyName)
+      value.bindOwner(this)
 
       if (options?.registerMeta) {
         value.registerMetadata(this.constructor as typeof Model, propertyName)
@@ -247,12 +271,320 @@ export abstract class Model {
     return (this as Record<string, unknown>)[relationName]
   }
 
-  deeplyGeneratePayload() {
-    // const payload = {
-    //   attributes: this.getAttributesPayload(),
-    //   relations: this.getMeta().relations.reduce((acc, relation) => {
-
-    //   }, {} as Record<string, unknown>),
-    // }
+  isDirty() {
+    return this._isNew || Object.keys(this._changes).length > 0
   }
+
+  hasPendingMutations(visited = new Set<Model>()) {
+    if (visited.has(this)) {
+      return false
+    }
+
+    visited.add(this)
+
+    if (this._isDeleted || this.isDirty()) {
+      return true
+    }
+
+    for (const relation of this.getMeta().relations) {
+      const relationValue = (this as Record<string, unknown>)[relation.property]
+
+      if (isRelationBuilder(relationValue)) {
+        if (relationValue.hasPendingOperations()) {
+          return true
+        }
+
+        const loaded = relationValue.getLoaded<unknown>()
+        if (relationHasPendingModels(loaded, visited)) {
+          return true
+        }
+
+        continue
+      }
+
+      if (relationHasPendingModels(relationValue, visited)) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  registerParentRelation(owner: Model, relation: string) {
+    const alreadyLinked = this._parentRelations.some(link => link.owner === owner && link.relation === relation)
+    if (!alreadyLinked) {
+      this._parentRelations.push({ owner, relation })
+    }
+  }
+
+  unregisterParentRelation(owner: Model, relation: string) {
+    this._parentRelations = this._parentRelations.filter(link => !(link.owner === owner && link.relation === relation))
+  }
+
+  getMutationRoot() {
+    return findMutationRoot(this)
+  }
+
+  async save(): Promise<this> {
+    const root = this.getMutationRoot()
+    const payload = buildModelPayload(root)
+
+    if (!payload) {
+      return this
+    }
+
+    const endpoint = root.getMeta().endpoint
+    await getCurrentFetch()(`http://localhost/api/${endpoint}/mutate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mutate: [payload] }),
+    })
+
+    commitModelGraph(root)
+    return this
+  }
+
+  async delete<T extends Model>(): Promise<{
+    data: T[]
+    meta: Record<string, unknown>
+  } | null> {
+    try {
+      const fetch = getCurrentFetch()
+      const response = await fetch<{
+        data: T[]
+        meta: Record<string, unknown>
+      }>(`http://localhost/api/${this.getMeta().endpoint}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ resources: [this.getKey()] }),
+      })
+      console.log()
+      this._isDeleted = true
+      return response
+    }
+    catch {
+      throw new Error('Delete operation failed. Make sure the model has a key and that the endpoint is correct.')
+    }
+  }
+
+  deeplyGeneratePayload() {
+    return buildModelPayload(this.getMutationRoot())
+  }
+}
+
+function relationHasPendingModels(value: unknown, visited: Set<Model>) {
+  if (Array.isArray(value)) {
+    return value.some(item => item instanceof Model && item.hasPendingMutations(visited))
+  }
+
+  return value instanceof Model ? value.hasPendingMutations(visited) : false
+}
+
+function isModelOperationRelevant(model: Model, visited = new Set<Model>()) {
+  return model.hasPendingMutations(visited)
+}
+
+function getImplicitRelationOperations(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is Model => item instanceof Model && isModelOperationRelevant(item))
+  }
+
+  if (value instanceof Model && isModelOperationRelevant(value)) {
+    return [value]
+  }
+
+  return []
+}
+
+function convertPendingRelationOperation(operation: PendingRelationOperation): MutationPayload | null {
+  if (operation.model) {
+    const models = Array.isArray(operation.model) ? operation.model : [operation.model]
+    if (models.length > 1) {
+      return null
+    }
+
+    const model = models[0]
+    if (!model) {
+      return null
+    }
+    if (operation.operation === 'detach') {
+      return {
+        operation: 'detach',
+        key: model.hasKey() ? model.getKey() : undefined,
+      }
+    }
+
+    if (operation.operation === 'attach' && !model._isNew && !model.isDirty() && !model.hasPendingMutations()) {
+      return {
+        operation: 'attach',
+        key: model.getKey(),
+        ...operation.options,
+      }
+    }
+
+    if (operation.operation === 'sync' || operation.operation === 'toggle') {
+      return {
+        operation: operation.operation,
+        key: model.getKey(),
+        ...operation.options,
+      }
+    }
+
+    return buildModelPayload(model, operation.operation === 'create' ? 'create' : model._isNew ? 'create' : 'update')
+  }
+
+  return {
+    operation: operation.operation,
+    key: operation.key,
+    ...operation.options,
+  }
+}
+
+function buildRelationPayload(owner: Model, relationMeta: ReturnType<Model['getMeta']>['relations'][number]): MutationPayload | MutationPayload[] | undefined {
+  const relationValue = (owner as unknown as Record<string, unknown>)[relationMeta.property]
+  const payloads: MutationPayload[] = []
+  const handledModels = new Set<Model>()
+
+  if (isRelationBuilder(relationValue)) {
+    for (const pending of relationValue.getPendingOperations()) {
+      const payload = convertPendingRelationOperation(pending)
+      if (payload) {
+        payloads.push(payload)
+      }
+
+      const models = pending.model ? (Array.isArray(pending.model) ? pending.model : [pending.model]) : []
+      models.forEach(model => handledModels.add(model))
+    }
+
+    const loaded = relationValue.getLoaded<unknown>()
+    for (const model of getImplicitRelationOperations(loaded)) {
+      if (!handledModels.has(model)) {
+        const payload = buildModelPayload(model)
+        if (payload) {
+          payloads.push(payload)
+        }
+      }
+    }
+
+    if (payloads.length === 0) {
+      return undefined
+    }
+
+    return relationMeta.many ? payloads : payloads[0]
+  }
+
+  const implicit = getImplicitRelationOperations(relationValue)
+  implicit.forEach((model) => {
+    const payload = buildModelPayload(model)
+    if (payload) {
+      payloads.push(payload)
+    }
+  })
+
+  if (payloads.length === 0) {
+    return undefined
+  }
+
+  return relationMeta.many ? payloads : payloads[0]
+}
+
+function buildModelPayload(model: Model, forcedOperation?: MutationPayload['operation'], visited = new Set<Model>()): MutationPayload | null {
+  if (visited.has(model)) {
+    return null
+  }
+
+  visited.add(model)
+
+  const attributes = model.getAttributesPayload()
+  const relations: Record<string, MutationPayload | MutationPayload[]> = {}
+
+  for (const relation of model.getMeta().relations) {
+    const relationPayload = buildRelationPayload(model, relation)
+    if (relationPayload !== undefined) {
+      relations[relation.property] = relationPayload
+    }
+  }
+
+  const operation = forcedOperation ?? (model._isDeleted ? 'delete' : (model._isNew ? 'create' : 'update'))
+  const hasAttributes = Object.keys(attributes).length > 0
+  const hasRelations = Object.keys(relations).length > 0
+
+  if (!forcedOperation && !model._isDeleted && !model._isNew && !hasAttributes && !hasRelations) {
+    return null
+  }
+
+  const payload: MutationPayload = { operation }
+
+  if (operation !== 'create' && model.hasKey()) {
+    payload.key = model.getKey()
+  }
+
+  if (hasAttributes) {
+    payload.attributes = attributes
+  }
+
+  if (hasRelations) {
+    payload.relations = relations
+  }
+
+  return payload
+}
+
+function commitModelGraph(model: Model, visited = new Set<Model>()) {
+  if (visited.has(model)) {
+    return
+  }
+
+  visited.add(model)
+
+  if (model._isDeleted) {
+    const meta = model.getMeta()
+    if (meta.key && model.hasKey()) {
+      IdentityMap.delete(model.constructor as unknown as new () => Model, model.getKey())
+    }
+  }
+  else {
+    model.applyChanges()
+    model._isNew = false
+  }
+
+  for (const relation of model.getMeta().relations) {
+    const relationValue = (model as unknown as Record<string, unknown>)[relation.property]
+
+    if (isRelationBuilder(relationValue)) {
+      relationValue.applyPendingOperations()
+      const loaded = relationValue.getLoaded<unknown>()
+      commitRelationValue(loaded, visited)
+      continue
+    }
+
+    commitRelationValue(relationValue, visited)
+  }
+}
+
+function commitRelationValue(value: unknown, visited: Set<Model>) {
+  if (Array.isArray(value)) {
+    value.forEach(item => item instanceof Model && commitModelGraph(item, visited))
+    return
+  }
+
+  if (value instanceof Model) {
+    commitModelGraph(value, visited)
+  }
+}
+
+function findMutationRoot(model: Model) {
+  const visited = new Set<Model>()
+  let root = model
+
+  while (root._parentRelations.length > 0) {
+    const next = root._parentRelations[0]?.owner
+    if (!next || visited.has(next)) {
+      break
+    }
+
+    visited.add(root)
+    root = next
+  }
+
+  return root
 }

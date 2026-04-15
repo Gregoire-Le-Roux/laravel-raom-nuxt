@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { QueryBuilder } from '../../src/runtime/query/QueryBuilder'
 import { Model } from '../../src/runtime/model/Model'
 import * as hydrateModule from '../../src/runtime/model/hydrate'
-import { Resource, Field, Key, Relation } from '../../src/runtime/core/decorators'
-import { MetadataStorage, type FieldMeta, type ResourceMeta } from '../../src/runtime/core/metadata'
+import { Resource, Field, Key } from '../../src/runtime/core/decorators'
+import { MetadataStorage, type ResourceMeta } from '../../src/runtime/core/metadata'
 
 type DecoratedCtor<T extends Model> = {
-  new (): T
+  new(): T
   query(): QueryBuilder<T>
   hydrate(data: unknown): T
   create(data: Partial<T>): T
@@ -152,78 +152,4 @@ describe('core decorators', () => {
     })
   })
 
-  describe('Relation', () => {
-    it('adds relation metadata with defaults through initializer', () => {
-      class TestModel extends Model {
-        posts!: Model[]
-      }
-
-      class Post extends Model {
-        id!: number
-      }
-
-      const meta = buildResourceMeta(TestModel)
-      vi.spyOn(MetadataStorage, 'getResource').mockReturnValue(meta)
-      const initializers: InitializerFn[] = []
-
-      const targetFn = () => Post
-
-      Relation(targetFn)(undefined, {
-        name: 'posts',
-        addInitializer(fn: InitializerFn) {
-          initializers.push(fn)
-        },
-      } as unknown as ClassFieldDecoratorContext)
-
-      runSingleInitializer(initializers, TestModel)
-
-      expect(meta.relations).toHaveLength(1)
-      const relation = meta.relations[0]!
-      expect(relation.property).toBe('posts')
-      expect(relation.many).toBe(true)
-      expect(relation.unique).toBe(false)
-      expect(relation.pivot).toEqual({})
-      expect(relation.target).toBe(targetFn)
-    })
-
-    it('applies unique and pivot options', () => {
-      class TestModel extends Model {
-        tags!: Model[]
-      }
-
-      class Tag extends Model {
-        id!: number
-      }
-
-      const meta = buildResourceMeta(TestModel)
-      vi.spyOn(MetadataStorage, 'getResource').mockReturnValue(meta)
-      const initializers: InitializerFn[] = []
-
-      const pivot: Record<string, FieldMeta> = {
-        role: { name: 'role', sortable: true },
-      }
-      const targetFn = () => Tag
-
-      Relation(targetFn, {
-        many: false,
-        unique: true,
-        pivot,
-      })(undefined, {
-        name: 'tags',
-        addInitializer(fn: InitializerFn) {
-          initializers.push(fn)
-        },
-      } as unknown as ClassFieldDecoratorContext)
-
-      runSingleInitializer(initializers, TestModel)
-
-      expect(meta.relations).toHaveLength(1)
-      const relation = meta.relations[0]!
-      expect(relation.property).toBe('tags')
-      expect(relation.many).toBe(false)
-      expect(relation.unique).toBe(true)
-      expect(relation.pivot).toEqual(pivot)
-      expect(relation.target).toBe(targetFn)
-    })
-  })
 })

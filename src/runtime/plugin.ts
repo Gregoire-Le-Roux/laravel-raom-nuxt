@@ -2,6 +2,7 @@ import { defineNuxtPlugin } from '#app'
 import { PayloadCache } from './cache/payloadCache'
 
 export default defineNuxtPlugin((_nuxtApp) => {
+  console.log('Plugin injected by laravel-rest-api-nuxt')
   if (import.meta.server) {
     // Start each SSR request with a clean cache.
     PayloadCache.clear()
@@ -24,5 +25,4 @@ export default defineNuxtPlugin((_nuxtApp) => {
     }
   }
 
-  console.log('Plugin injected by my-module!')
 })

@@ -1,5 +1,6 @@
 import { IdentityMap } from '../core/identityMap'
 import { MetadataStorage } from '../core/metadata'
+import { isRelationBuilder } from '../relations/builders'
 import type { Model } from './Model'
 
 export function hydrate<T extends Model>(resourceClass: new () => T, data: any): T {
@@ -8,6 +9,10 @@ export function hydrate<T extends Model>(resourceClass: new () => T, data: any):
   const keyValue = keyField ? data[keyField] : undefined
   const sharedFields = IdentityMap.get(resourceClass, keyValue)
   const instance = new resourceClass()
+
+  if (typeof instance.initializeRelationBuilders === 'function') {
+    instance.initializeRelationBuilders()
+  }
 
   if (sharedFields) {
     instance.useSharedFields(sharedFields)
@@ -41,23 +46,49 @@ export function hydrate<T extends Model>(resourceClass: new () => T, data: any):
 
   for (const relation of meta.relations) {
     const relData = data[relation.property]
-    if (!relData) continue
-
     const relationBuilderCandidate = (instance as any)[relation.property]
+
+    if (!relData) {
+      if (isRelationBuilder(relationBuilderCandidate)) {
+        relationBuilderCandidate.clear()
+      }
+      continue
+    }
+
+    const assignLoadedParents = (value: unknown) => {
+      const register = (item: unknown) => {
+        if (item && typeof item === 'object' && 'registerParentRelation' in item && typeof item.registerParentRelation === 'function') {
+          item.registerParentRelation(instance, relation.property)
+        }
+      }
+
+      if (Array.isArray(value)) {
+        value.forEach(register)
+        return
+      }
+
+      register(value)
+    }
 
     if (relation.many) {
       const hydratedRelation = relData.map((item: any) => hydrate(relation.target(), item))
       if (relationBuilderCandidate && typeof relationBuilderCandidate.setLoaded === 'function') {
         relationBuilderCandidate.setLoaded(hydratedRelation)
       }
-      ;(instance as any)[relation.property] = hydratedRelation
+      else {
+        ; (instance as any)[relation.property] = hydratedRelation
+        assignLoadedParents(hydratedRelation)
+      }
     }
     else {
       const hydratedRelation = hydrate(relation.target(), relData)
       if (relationBuilderCandidate && typeof relationBuilderCandidate.setLoaded === 'function') {
         relationBuilderCandidate.setLoaded(hydratedRelation)
       }
-      ;(instance as any)[relation.property] = hydratedRelation
+      else {
+        ; (instance as any)[relation.property] = hydratedRelation
+        assignLoadedParents(hydratedRelation)
+      }
     }
   }
 
