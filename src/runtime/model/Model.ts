@@ -359,7 +359,6 @@ export abstract class Model {
         method: 'DELETE',
         body: JSON.stringify({ resources: [this.getKey()] }),
       })
-      console.log()
       this._isDeleted = true
       return response
     }
