@@ -1,4 +1,4 @@
-import { defineNuxtModule, addPlugin, createResolver } from '@nuxt/kit'
+import { defineNuxtModule, addPlugin, createResolver, addImportsDir } from '@nuxt/kit'
 
 // Module options TypeScript interface definition
 export type ModuleOptions = Record<string, never>
@@ -11,6 +11,7 @@ export default defineNuxtModule<ModuleOptions>({
   defaults: {},
   setup(_options, nuxt) {
     const resolver = createResolver(import.meta.url)
+    addImportsDir(nuxt.options.srcDir + "/models");
     addPlugin(resolver.resolve('./runtime/plugin'))
   },
 })

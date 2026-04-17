@@ -155,19 +155,15 @@ export class QueryBuilder<T extends Model> {
    */
   include(relation: keyof T | string, callback?: (q: QueryBuilder<any>) => void): this {
     const relationMeta = this.findDistantRelation(relation as string)
-    const includeBuilder = new QueryBuilder<any>(relationMeta.target)
-    if (callback) callback(includeBuilder)
 
     const include: Include = {
       relation: relation as string,
     }
 
-    if (includeBuilder.filters.length > 0) {
-      include.filters = includeBuilder.filters as Filter[]
-    }
-
-    if (includeBuilder.includes.length > 0) {
-      include.includes = includeBuilder.includes
+    if (callback) {
+      const includeBuilder = new QueryBuilder<any>(relationMeta.target)
+      callback(includeBuilder)
+      Object.assign(include, includeBuilder.buildPayload().search)
     }
 
     this.includes.push(include)
