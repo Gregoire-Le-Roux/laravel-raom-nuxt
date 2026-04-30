@@ -325,7 +325,7 @@ export class QueryBuilder<T extends Model> {
       search: {},
     }
 
-    if (this.textSearch) {
+    if (this.textSearch?.trim()) {
       payload.search.text = { value: this.textSearch }
     }
 
