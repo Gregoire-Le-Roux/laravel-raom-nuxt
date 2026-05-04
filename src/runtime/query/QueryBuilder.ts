@@ -320,7 +320,7 @@ export class QueryBuilder<T extends Model> {
   /**
    * Construit le payload pour l'API
    */
-  private buildPayload(): SearchPayload {
+  public buildPayload(): SearchPayload {
     const payload: SearchPayload = {
       search: {},
     }

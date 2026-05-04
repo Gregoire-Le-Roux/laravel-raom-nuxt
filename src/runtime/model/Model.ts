@@ -4,6 +4,8 @@ import { IdentityMap } from '../core/identityMap'
 import { type PendingRelationOperation } from '../relations/base'
 import getCurrentFetch from '../helpers/getCurrentFetch'
 import { isRelationBuilder } from '../relations'
+import type { IDetailsResponse } from '../types/details'
+import type { IActionField, IActionResponse } from '../types/actions'
 
 type ParentRelationLink = {
   owner: Model
@@ -364,6 +366,43 @@ export abstract class Model {
     }
     catch {
       throw new Error('Delete operation failed. Make sure the model has a key and that the endpoint is correct.')
+    }
+  }
+
+  static async details<T extends Model>(): Promise<IDetailsResponse<T>> {
+    try {
+      const fetch = getCurrentFetch()
+      const response = await fetch<IDetailsResponse<T>>(`http://localhost/api/${this.getMeta().endpoint}`, {
+        method: 'GET',
+      })
+      return response
+    }
+    catch {
+      throw new Error('Details operation failed. Make sure the endpoint is correct.')
+    }
+  }
+
+  static async actions<T extends Model>(actionName: string, fields?: IActionField[], queryCallback?: (query: QueryBuilder<T>) => void): Promise<IActionResponse> {
+    try {
+      const fetch = getCurrentFetch()
+
+      let searchPayload = {}
+      if (queryCallback) {
+        const query = this.getMeta().target.query<T>()
+        queryCallback(query)
+        searchPayload = query.buildPayload()
+      }
+
+      const response = await fetch<IActionResponse>(`http://localhost/api/${this.getMeta().endpoint}/actions/${actionName}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          fields,
+          search: searchPayload
+        }),
+      })
+      return response
+    } catch {
+      throw new Error(`Action ${actionName} failed. Make sure the model has a key, that the endpoint is correct, and that the action exists.`)
     }
   }
 
