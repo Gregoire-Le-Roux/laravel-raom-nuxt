@@ -20,7 +20,7 @@ export class ModelList<T extends Model> implements Iterable<T> {
   }
 
   private get activeItems(): T[] {
-    return this.items.filter(item => !item._isDeleted)
+    return this.items.filter(item => !item._sharedMeta.isDeleted)
   }
 
   [Symbol.iterator](): Iterator<T> {

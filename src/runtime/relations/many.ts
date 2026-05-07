@@ -146,7 +146,7 @@ export abstract class ManyRelationBuilderBase extends RelationBuilderBase {
         items.forEach((item) => {
             if (item && typeof item === 'object' && 'constructor' in item) {
                 const relationModel = item as Model
-                if (relationModel._isNew || relationModel._isDeleted) {
+                if (relationModel._isNew || relationModel._sharedMeta.isDeleted) {
                     throw new Error(`Relation ${this.relationName} sync() expects persisted, non-deleted models.`)
                 }
                 this.queue({ operation: 'sync', model: relationModel, options })
@@ -169,7 +169,7 @@ export abstract class ManyRelationBuilderBase extends RelationBuilderBase {
         items.forEach((item) => {
             if (item && typeof item === 'object' && 'constructor' in item) {
                 const relationModel = item as Model
-                if (relationModel._isDeleted) {
+                if (relationModel._sharedMeta.isDeleted) {
                     throw new Error(`Relation ${this.relationName} toggle() cannot target a deleted model.`)
                 }
                 this.queue({ operation: 'toggle', model: relationModel, options })

@@ -153,11 +153,11 @@ describe('Model', () => {
 
   it('hydrate resets _isDeleted', () => {
     const product = Product.hydrate({ id: 1, name: 'Hydrated product' })
-    product._isDeleted = true
+    product._sharedMeta.isDeleted = true
 
     const hydratedAgain = Product.hydrate({ id: 1, name: 'Hydrated product' })
 
-    expect(hydratedAgain._isDeleted).toBe(false)
+    expect(hydratedAgain._sharedMeta.isDeleted).toBe(false)
   })
 
   it('relation helpers remain defined without mutation behavior', () => {
@@ -298,7 +298,7 @@ describe('Model', () => {
   it('rejects attach() when the related model is deleted', () => {
     const user = PersistedBlogUser.hydrate({ id: 1, posts: [] })
     const post = BlogPost.hydrate({ id: 9, title: 'Post' })
-    post._isDeleted = true
+    post._sharedMeta.isDeleted = true
 
     expect(() => user.posts.attach(post)).toThrow('cannot attach a deleted model')
   })
@@ -431,7 +431,7 @@ describe('Model', () => {
     expect(() => user.posts.sync(draft)).toThrow('expects persisted, non-deleted models')
 
     const deleted = BlogPost.hydrate({ id: 9, title: 'Deleted' })
-    deleted._isDeleted = true
+    deleted._sharedMeta.isDeleted = true
     expect(() => user.posts.sync(deleted)).toThrow('expects persisted, non-deleted models')
   })
 

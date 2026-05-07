@@ -1,4 +1,5 @@
-import type { Model } from '../model/Model'
+import type { Ref } from '#imports'
+import type { Model, SharedMeta } from '../model/Model'
 
 type ModelConstructor<T extends Model = Model> = new () => T
 
@@ -13,6 +14,11 @@ export type IdentityMapGroup = {
   model: string
   count: number
   entries: IdentityMapEntry[]
+}
+
+type IdentityMapData = {
+  fields: Record<string, unknown>
+  sharedMeta: SharedMeta
 }
 
 const clientStore: IdentityMapStore | null = import.meta.client ? new Map() : null
@@ -53,18 +59,18 @@ function serialize(value: unknown): unknown {
 }
 
 export const IdentityMap = {
-  get<T extends Model>(modelClass: ModelConstructor<T>, key: unknown): Record<string, unknown> | undefined {
+  get<T extends Model>(modelClass: ModelConstructor<T>, key: unknown): IdentityMapData | undefined {
     if (!clientStore || key === undefined || key === null) {
       return undefined
     }
-    return getBucket(modelClass)?.get(key)
+    return getBucket(modelClass)?.get(key) as IdentityMapData | undefined
   },
-  set<T extends Model>(modelClass: ModelConstructor<T>, key: unknown, fields: Record<string, unknown>): Record<string, unknown> {
+  set<T extends Model>(modelClass: ModelConstructor<T>, key: unknown, shared: IdentityMapData): IdentityMapData {
     if (key === undefined || key === null) {
-      return fields
+      return shared
     }
-    getBucket(modelClass)?.set(key, fields)
-    return fields
+    getBucket(modelClass)?.set(key, shared)
+    return shared
   },
   delete<T extends Model>(modelClass: ModelConstructor<T>, key: unknown): void {
     if (!clientStore || key === undefined || key === null) {

@@ -47,7 +47,7 @@ interface Instruction {
   fields?: Array<{ name: string, value: any }>
 }
 
-interface SearchPayload {
+export interface SearchPayload {
   search: {
     text?: {
       value: string
@@ -179,13 +179,12 @@ export class QueryBuilder<T extends Model> {
       value = operator
       operator = '='
     }
-    const fieldMeta = this.findDistantField(field as string)
+    this.findDistantField(field as string)
 
     this.filters.push({
       field: field as string,
       operator: operator as FilterOperator,
       value,
-      type: 'and',
     })
 
     return this
@@ -199,7 +198,8 @@ export class QueryBuilder<T extends Model> {
       value = operator
       operator = '='
     }
-    const fieldMeta = this.findDistantField(field as string)
+
+    this.findDistantField(field as string)
 
     this.filters.push({
       field: field as string,

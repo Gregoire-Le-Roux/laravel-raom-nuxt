@@ -132,7 +132,7 @@ export abstract class SingleRelationBuilderBase extends RelationBuilderBase {
         items.forEach((item) => {
             if (item && typeof item === 'object' && 'constructor' in item) {
                 const relationModel = item as Model
-                if (relationModel._isDeleted) {
+                if (relationModel._sharedMeta.isDeleted) {
                     throw new Error(`Relation ${this.relationName} toggle() cannot target a deleted model.`)
                 }
                 this.queue({ operation: 'toggle', model: relationModel, options: normalizedOptions })

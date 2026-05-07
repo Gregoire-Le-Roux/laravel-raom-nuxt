@@ -1,3 +1,4 @@
+import { reactive, ref, type Ref } from 'vue'
 import { IdentityMap } from '../core/identityMap'
 import { MetadataStorage } from '../core/metadata'
 import { isRelationBuilder } from '../relations'
@@ -7,6 +8,7 @@ export function hydrate<T extends Model>(resourceClass: new () => T, data: any):
   const meta = MetadataStorage.getResource(resourceClass)
   const keyField = meta.key
   const keyValue = keyField ? data[keyField] : undefined
+
   const sharedFields = IdentityMap.get(resourceClass, keyValue)
   const instance = new resourceClass()
 
@@ -15,10 +17,9 @@ export function hydrate<T extends Model>(resourceClass: new () => T, data: any):
   }
 
   if (sharedFields) {
-    instance.useSharedFields(sharedFields)
+    instance.useSharedFields(sharedFields.fields as Record<string, unknown>)
+    instance.useSharedMeta(sharedFields.sharedMeta)
   }
-
-  instance._isDeleted = false
 
   const relationProperties = new Set(meta.relations.map(r => r.property))
 
@@ -93,8 +94,13 @@ export function hydrate<T extends Model>(resourceClass: new () => T, data: any):
   }
 
   if (keyValue !== undefined && keyValue !== null) {
-    IdentityMap.set(resourceClass, keyValue, instance._fields)
+    const existing = IdentityMap.get(resourceClass, keyValue)
+    if (!existing) {
+      const reactiveFields = reactive(instance._fields)
+      const reactiveSharedMeta = reactive({ isDeleted: false })
+      instance._sharedMeta = reactiveSharedMeta
+      IdentityMap.set(resourceClass, keyValue, { fields: reactiveFields, sharedMeta: reactiveSharedMeta })
+    }
   }
-
   return instance
 }

@@ -1,11 +1,13 @@
 import { MetadataStorage } from '../core/metadata'
-import type { QueryBuilder } from '../query/QueryBuilder'
+import type { QueryBuilder, SearchPayload } from '../query/QueryBuilder'
 import { IdentityMap } from '../core/identityMap'
 import { type PendingRelationOperation } from '../relations/base'
 import getCurrentFetch from '../helpers/getCurrentFetch'
 import { isRelationBuilder } from '../relations'
 import type { IDetailsResponse } from '../types/details'
 import type { IActionField, IActionResponse } from '../types/actions'
+import { reactive, ref } from 'vue'
+import type { IMutateResponse } from '../types/mutate'
 
 type ParentRelationLink = {
   owner: Model
@@ -19,16 +21,27 @@ type MutationPayload = {
   relations?: Record<string, MutationPayload | MutationPayload[]>
 } & Record<string, unknown>
 
+type Gates = Record<string, boolean | { allowed: boolean, message: string }>
+
+export type SharedMeta = {
+  isDeleted: boolean
+}
 export abstract class Model {
-  _isDeleted = false
+  _sharedMeta = reactive<SharedMeta>({ isDeleted: false })
   _isNew = false
   _fields: Record<string, unknown> = {}
   _changes: Record<string, unknown> = {}
   _parentRelations: ParentRelationLink[] = []
+  _bypassProxy = false
+
+  gates: Gates = {}
 
   constructor() {
     return new Proxy(this, {
       get(target, property, receiver) {
+        if (typeof property === 'string' && property.startsWith('_')) {
+          return target[property as keyof Model]
+        }
         if (typeof property === 'string' && Object.prototype.hasOwnProperty.call(target._changes, property)) {
           return target._changes[property]
         }
@@ -134,6 +147,10 @@ export abstract class Model {
    */
   useSharedFields(fields: Record<string, unknown>) {
     this._fields = fields
+  }
+
+  useSharedMeta(meta: SharedMeta) {
+    this._sharedMeta = meta
   }
 
   /**
@@ -286,7 +303,7 @@ export abstract class Model {
 
     visited.add(this)
 
-    if (this._isDeleted || this.isDirty()) {
+    if (this._sharedMeta.isDeleted || this.isDirty()) {
       return true
     }
 
@@ -329,23 +346,22 @@ export abstract class Model {
     return findMutationRoot(this)
   }
 
-  async save(): Promise<this> {
-    const root = this.getMutationRoot()
-    const payload = buildModelPayload(root)
+  async save(): Promise<IMutateResponse> {
+    const payload = buildModelPayload(this)
 
     if (!payload) {
       return this
     }
 
-    const endpoint = root.getMeta().endpoint
-    await getCurrentFetch()(`http://localhost/api/${endpoint}/mutate`, {
+    const endpoint = this.getMeta().endpoint
+    const mutateRes = await getCurrentFetch()<IMutateResponse>(`http://localhost/api/${endpoint}/mutate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mutate: [payload] }),
     })
 
-    commitModelGraph(root)
-    return this
+    commitModelGraph(this)
+    return mutateRes
   }
 
   async delete<T extends Model>(): Promise<{
@@ -361,7 +377,7 @@ export abstract class Model {
         method: 'DELETE',
         body: JSON.stringify({ resources: [this.getKey()] }),
       })
-      this._isDeleted = true
+      this._sharedMeta.isDeleted = true
       return response
     }
     catch {
@@ -386,9 +402,9 @@ export abstract class Model {
     try {
       const fetch = getCurrentFetch()
 
-      let searchPayload = {}
+      let searchPayload = {} as SearchPayload
       if (queryCallback) {
-        const query = this.getMeta().target.query<T>()
+        const query = (this.getMeta().target as typeof Model).query<T>()
         queryCallback(query)
         searchPayload = query.buildPayload()
       }
@@ -397,7 +413,7 @@ export abstract class Model {
         method: 'POST',
         body: JSON.stringify({
           fields,
-          search: searchPayload
+          search: searchPayload.search
         }),
       })
       return response
@@ -409,6 +425,7 @@ export abstract class Model {
   deeplyGeneratePayload() {
     return buildModelPayload(this.getMutationRoot())
   }
+
 }
 
 function relationHasPendingModels(value: unknown, visited: Set<Model>) {
@@ -544,11 +561,11 @@ function buildModelPayload(model: Model, forcedOperation?: MutationPayload['oper
     }
   }
 
-  const operation = forcedOperation ?? (model._isDeleted ? 'delete' : (model._isNew ? 'create' : 'update'))
+  const operation = forcedOperation ?? (model._sharedMeta.isDeleted ? 'delete' : (model._isNew ? 'create' : 'update'))
   const hasAttributes = Object.keys(attributes).length > 0
   const hasRelations = Object.keys(relations).length > 0
 
-  if (!forcedOperation && !model._isDeleted && !model._isNew && !hasAttributes && !hasRelations) {
+  if (!forcedOperation && !model._sharedMeta.isDeleted && !model._isNew && !hasAttributes && !hasRelations) {
     return null
   }
 
@@ -576,7 +593,7 @@ function commitModelGraph(model: Model, visited = new Set<Model>()) {
 
   visited.add(model)
 
-  if (model._isDeleted) {
+  if (model._sharedMeta.isDeleted) {
     const meta = model.getMeta()
     if (meta.key && model.hasKey()) {
       IdentityMap.delete(model.constructor as unknown as new () => Model, model.getKey())

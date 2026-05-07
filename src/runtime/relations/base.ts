@@ -189,7 +189,7 @@ export abstract class RelationBuilderBase {
         items.forEach((item) => {
             if (item && typeof item === 'object' && 'constructor' in item) {
                 const relationModel = item as Model
-                if (relationModel._isDeleted) {
+                if (relationModel._sharedMeta.isDeleted) {
                     throw new Error(`Relation ${this.relationName} cannot attach a deleted model.`)
                 }
                 callback?.(relationModel)
