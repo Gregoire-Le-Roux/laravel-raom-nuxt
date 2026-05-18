@@ -42,10 +42,6 @@ export abstract class Model {
         if (typeof property === 'string' && property.startsWith('_')) {
           return target[property as keyof Model]
         }
-        if (typeof property === 'string' && Object.prototype.hasOwnProperty.call(target._changes, property)) {
-          return target._changes[property]
-        }
-
         if (typeof property === 'string' && Object.prototype.hasOwnProperty.call(target._fields, property)) {
           return target._fields[property]
         }
