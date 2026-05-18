@@ -6,6 +6,7 @@ import { ModelList } from '../model/ModelList'
 import { PayloadCache } from '../cache/payloadCache'
 import getCurrentFetch from '../helpers/getCurrentFetch'
 import type { ISearchResponse } from '../types/search'
+import { snakeCaseToCamelCase } from '../utils/snakeCaseToCamelCase'
 
 type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'like' | 'not like' | 'in' | 'not in' | 'between' | 'not between'
 type FilterType = 'and' | 'or'
@@ -92,7 +93,7 @@ export class QueryBuilder<T extends Model> {
     let resource = this.resource
     relationNames.forEach((relationName) => {
       const relation = resource.relations.find(relation =>
-        relation.property === relationName,
+        snakeCaseToCamelCase(relation.property) === relationName,
       )
       if (!relation)
         throw new Error(`Relation ${relationName} doesn't exist in resource ${resource.endpoint}`)
@@ -115,7 +116,7 @@ export class QueryBuilder<T extends Model> {
     let resource = this.resource
     relationNames.forEach((relationName) => {
       const relation = resource.relations.find(relation =>
-        relation.property === relationName,
+        snakeCaseToCamelCase(relation.property) === relationName,
       )
       if (!relation)
         throw new Error(`Relation ${relationName} doesn't exist in resource ${resource.endpoint}`)

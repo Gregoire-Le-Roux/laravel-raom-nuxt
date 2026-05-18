@@ -1,6 +1,7 @@
 import type { Model } from '../model/Model'
 import type { FieldMeta } from '../core/metadata'
 import { MetadataStorage } from '../core/metadata'
+import { snakeCaseToCamelCase } from '../utils/snakeCaseToCamelCase'
 
 export type RelationTarget = Model | { id?: unknown } | number | string
 export type RelationTargetInput = RelationTarget | RelationTarget[]
@@ -153,7 +154,7 @@ export abstract class RelationBuilderBase {
         if (!this.owner) return
         const register = (item: unknown) => {
             if (item && typeof item === 'object' && 'registerParentRelation' in item && typeof (item as Record<string, unknown>).registerParentRelation === 'function') {
-                (item as { registerParentRelation(owner: Model, relation: string): void }).registerParentRelation(this.owner!, this.relationName)
+                (item as { registerParentRelation(owner: Model, relation: string): void }).registerParentRelation(this.owner!, snakeCaseToCamelCase(this.relationName))
             }
         }
         if (Array.isArray(value)) {
@@ -167,7 +168,7 @@ export abstract class RelationBuilderBase {
         if (!this.owner) return
         const unregister = (item: unknown) => {
             if (item && typeof item === 'object' && 'unregisterParentRelation' in item && typeof (item as Record<string, unknown>).unregisterParentRelation === 'function') {
-                (item as { unregisterParentRelation(owner: Model, relation: string): void }).unregisterParentRelation(this.owner!, this.relationName)
+                (item as { unregisterParentRelation(owner: Model, relation: string): void }).unregisterParentRelation(this.owner!, snakeCaseToCamelCase(this.relationName))
             }
         }
         if (Array.isArray(value)) {
