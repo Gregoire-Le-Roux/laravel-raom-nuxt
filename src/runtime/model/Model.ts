@@ -4,10 +4,12 @@ import { IdentityMap } from '../core/identityMap'
 import { type PendingRelationOperation } from '../relations/base'
 import getCurrentFetch from '../helpers/getCurrentFetch'
 import { isRelationBuilder } from '../relations'
+import { PayloadCache } from '../cache/payloadCache'
 import type { IDetailsResponse } from '../types/details'
 import type { IActionField, IActionResponse } from '../types/actions'
 import { reactive, ref } from 'vue'
 import type { IMutateResponse } from '../types/mutate'
+import { snakeCaseToCamelCase } from '../utils/snakeCaseToCamelCase'
 
 type ParentRelationLink = {
   owner: Model
@@ -356,6 +358,7 @@ export abstract class Model {
       body: JSON.stringify({ mutate: [payload] }),
     })
 
+    PayloadCache.invalidate(endpoint)
     commitModelGraph(this)
     return mutateRes
   }
@@ -365,14 +368,16 @@ export abstract class Model {
     meta: Record<string, unknown>
   } | null> {
     try {
+      const endpoint = this.getMeta().endpoint
       const fetch = getCurrentFetch()
       const response = await fetch<{
         data: T[]
         meta: Record<string, unknown>
-      }>(`http://localhost/api/${this.getMeta().endpoint}`, {
+      }>(`http://localhost/api/${endpoint}`, {
         method: 'DELETE',
         body: JSON.stringify({ resources: [this.getKey()] }),
       })
+      PayloadCache.invalidate(endpoint)
       this._sharedMeta.isDeleted = true
       return response
     }
@@ -553,7 +558,7 @@ function buildModelPayload(model: Model, forcedOperation?: MutationPayload['oper
   for (const relation of model.getMeta().relations) {
     const relationPayload = buildRelationPayload(model, relation)
     if (relationPayload !== undefined) {
-      relations[relation.property] = relationPayload
+      relations[snakeCaseToCamelCase(relation.property)] = relationPayload
     }
   }
 

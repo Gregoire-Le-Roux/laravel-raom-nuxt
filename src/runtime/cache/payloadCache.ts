@@ -1,7 +1,8 @@
 /**
- * Payload cache for SSR → client data transfer
- * Stores API responses during SSR and makes them available on client
- * without re-fetching the same requests.
+ * Payload cache for SSR dedupe and SSR → client transfer.
+ * Populated during SSR, serialized into the Nuxt payload, and restored on
+ * the client so the first hydration doesn't re-fetch. Entries are
+ * invalidated per-resource on mutate/delete.
  */
 
 export interface CacheEntry {
@@ -78,6 +79,17 @@ export const PayloadCache = {
    */
   setEnabled(enabled: boolean): void {
     cacheEnabled = enabled
+  },
+
+  /**
+   * Drop every entry whose URL targets the given resource endpoint
+   * (search, details, mutate, delete, actions…). Called after any write
+   * so the next read on the same resource hits the network.
+   */
+  invalidate(endpoint: string): void {
+    payloadCache = payloadCache.filter(
+      entry => entry.url !== endpoint && !entry.url.startsWith(`${endpoint}/`),
+    )
   },
 
   /**

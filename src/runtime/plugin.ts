@@ -21,5 +21,4 @@ export default defineNuxtPlugin((_nuxtApp) => {
       PayloadCache.restore(cached)
     }
   }
-
 })
