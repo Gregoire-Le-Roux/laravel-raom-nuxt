@@ -271,7 +271,7 @@ describe('Model', () => {
     await post.save()
 
     const [url, request] = (globalThis as unknown as G).$fetch.mock.calls[0] as [string, { body: string }]
-    expect(url).toBe('http://localhost/api/blog-users/mutate')
+    expect(url).toBe('http://localhost/blog-users/mutate')
     expect(JSON.parse(request.body)).toEqual({
       mutate: [
         {
@@ -506,7 +506,7 @@ describe('Model', () => {
     await report.save()
 
     const { url, body } = lastMutationRequest()
-    expect(url).toBe('http://localhost/api/reports/mutate')
+    expect(url).toBe('http://localhost/reports/mutate')
     expect(body).toEqual({
       mutate: [
         {

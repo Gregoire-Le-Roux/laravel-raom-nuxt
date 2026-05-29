@@ -352,7 +352,7 @@ export abstract class Model {
     }
 
     const endpoint = this.getMeta().endpoint
-    const mutateRes = await getCurrentFetch()<IMutateResponse>(`/api/${endpoint}/mutate`, {
+    const mutateRes = await getCurrentFetch()<IMutateResponse>(`/${endpoint}/mutate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mutate: [payload] }),
@@ -373,7 +373,7 @@ export abstract class Model {
       const response = await fetch<{
         data: T[]
         meta: Record<string, unknown>
-      }>(`/api/${endpoint}`, {
+      }>(`/${endpoint}`, {
         method: 'DELETE',
         body: JSON.stringify({ resources: [this.getKey()] }),
       })
@@ -389,7 +389,7 @@ export abstract class Model {
   static async details<T extends Model>(): Promise<IDetailsResponse<T>> {
     try {
       const fetch = getCurrentFetch()
-      const response = await fetch<IDetailsResponse<T>>(`/api/${this.getMeta().endpoint}`, {
+      const response = await fetch<IDetailsResponse<T>>(`/${this.getMeta().endpoint}`, {
         method: 'GET',
       })
       return response
@@ -410,7 +410,7 @@ export abstract class Model {
         searchPayload = query.buildPayload()
       }
 
-      const response = await fetch<IActionResponse>(`/api/${this.getMeta().endpoint}/actions/${actionName}`, {
+      const response = await fetch<IActionResponse>(`/${this.getMeta().endpoint}/actions/${actionName}`, {
         method: 'POST',
         body: JSON.stringify({
           fields,
